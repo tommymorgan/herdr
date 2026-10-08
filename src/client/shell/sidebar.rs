@@ -241,6 +241,8 @@ pub(in crate::client::shell) fn render_plugin_ui_rows(
             rect,
             plugin_id: row.plugin_id.clone(),
             action: row.action.clone(),
+            tab_id: row.tab_id.clone(),
+            workspace_id: row.workspace_id.clone(),
         });
     }
 }

@@ -9046,9 +9046,19 @@
         "PluginManifestUi": {
           "properties": {
             "action": {
-              "description": "Declared action invoked when the entry is activated. The action id\nmust match one of the plugin's `[[actions]]` entries.",
+              "description": "Declared action invoked when the entry is activated. The action id\nmust match one of the plugin's `[[actions]]` entries. Ignored for\ndynamic entries whose rows carry their own actions.",
               "type": [
                 "string",
+                "null"
+              ]
+            },
+            "command": {
+              "description": "When set, the entry is dynamic: Herdr runs this command and renders\nthe JSON rows it prints on stdout instead of the static title.",
+              "items": {
+                "type": "string"
+              },
+              "type": [
+                "array",
                 "null"
               ]
             },
@@ -9068,12 +9078,13 @@
               "$ref": "#/schemas/success_response/$defs/PluginUiSurface"
             },
             "title": {
+              "default": "",
+              "description": "Static label shown when `command` is absent. Dynamic entries may omit\nit because their rows carry their own titles.",
               "type": "string"
             }
           },
           "required": [
             "id",
-            "title",
             "surface"
           ],
           "type": "object"

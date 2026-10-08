@@ -244,6 +244,8 @@ pub(super) struct PluginUiHit {
     pub(super) rect: Rect,
     pub(super) plugin_id: String,
     pub(super) action: Option<String>,
+    pub(super) tab_id: Option<String>,
+    pub(super) workspace_id: Option<String>,
 }
 
 #[derive(Debug)]

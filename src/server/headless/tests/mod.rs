@@ -1040,6 +1040,7 @@ async fn client_shell_receives_plugin_ui_rows_with_snapshot() {
             title: "Review focus".into(),
             surface: crate::api::schema::PluginUiSurface::Sidebar,
             action: Some("focus".into()),
+            command: None,
             platforms: None,
         }],
         source: Default::default(),
@@ -1096,6 +1097,139 @@ async fn client_shell_receives_plugin_ui_rows_with_snapshot() {
     };
     assert!(cleared.ui.is_empty());
     assert!(cleared.revision > projection.revision);
+    shutdown_test_runtimes(&mut server);
+}
+
+#[tokio::test]
+async fn client_shell_receives_dynamic_plugin_ui_rows() {
+    let mut server = test_headless_server();
+    let (writer, control_rx, _render_rx) = test_client_writer();
+
+    let plugin = crate::api::schema::InstalledPluginInfo {
+        plugin_id: "tree.plugin".into(),
+        name: "Agent tree".into(),
+        version: "0.1.0".into(),
+        min_herdr_version: crate::build_info::BASE_VERSION.into(),
+        description: None,
+        manifest_path: "/plugins/tree/herdr-plugin.toml".into(),
+        plugin_root: "/plugins/tree".into(),
+        enabled: true,
+        platforms: None,
+        build: Vec::new(),
+        startup: Vec::new(),
+        actions: vec![crate::api::schema::PluginManifestAction {
+            id: "focus-tab".into(),
+            title: "Focus tab".into(),
+            description: None,
+            contexts: Vec::new(),
+            platforms: None,
+            command: vec!["echo".into(), "focus-tab".into()],
+        }],
+        events: Vec::new(),
+        panes: Vec::new(),
+        link_handlers: Vec::new(),
+        ui: vec![crate::api::schema::PluginManifestUi {
+            id: "tree".into(),
+            title: String::new(),
+            surface: crate::api::schema::PluginUiSurface::Sidebar,
+            action: None,
+            command: Some(vec!["echo".into(), "rows".into()]),
+            platforms: None,
+        }],
+        source: Default::default(),
+        warnings: Vec::new(),
+    };
+    server
+        .app
+        .state
+        .installed_plugins
+        .insert(plugin.plugin_id.clone(), plugin);
+    let rows = vec![
+        crate::protocol::endpoint::EndpointPluginUiItem {
+            plugin_id: "tree.plugin".into(),
+            ui_id: "tree".into(),
+            title: "▾ ● main".into(),
+            action: Some("focus-tab".into()),
+            tab_id: None,
+            workspace_id: Some("ws-1".into()),
+        },
+        crate::protocol::endpoint::EndpointPluginUiItem {
+            plugin_id: "tree.plugin".into(),
+            ui_id: "tree".into(),
+            title: "    ○ build".into(),
+            action: Some("focus-tab".into()),
+            tab_id: Some("tab-1".into()),
+            workspace_id: Some("ws-1".into()),
+        },
+    ];
+    server
+        .app
+        .state
+        .plugin_ui_dynamic
+        .insert(("tree.plugin".into(), "tree".into()), rows);
+
+    assert!(
+        server.handle_server_event(ServerEvent::ClientShellConnected {
+            surface_reuse: false,
+            surface_delta: false,
+            surface_scroll: false,
+            client_id: 78,
+            surface_cols: 80,
+            surface_rows: 23,
+            cell_width_px: 0,
+            cell_height_px: 0,
+            pixel_mouse: false,
+            direct_graphics: false,
+            endpoint_keybindings: false,
+            mouse_capture: false,
+            surface_active: false,
+            writer,
+        })
+    );
+    let mut projection = None;
+    for _ in 0..8 {
+        match read_server_message(control_rx.recv().expect("server message")) {
+            ServerMessage::EndpointControl { kind, data }
+                if kind == crate::protocol::endpoint::PLUGIN_UI_KIND =>
+            {
+                projection = Some(
+                    serde_json::from_str::<crate::protocol::endpoint::EndpointPluginUi>(&data)
+                        .expect("plugin ui decodes"),
+                );
+                break;
+            }
+            _ => continue,
+        }
+    }
+    let projection = projection.expect("plugin ui control before unrelated messages exhaust");
+    assert_eq!(projection.ui.len(), 2);
+    assert_eq!(projection.ui[1].title, "    ○ build");
+    assert_eq!(projection.ui[1].tab_id.as_deref(), Some("tab-1"));
+    assert_eq!(projection.ui[0].workspace_id.as_deref(), Some("ws-1"));
+
+    server
+        .app
+        .state
+        .plugin_ui_dynamic
+        .remove(&("tree.plugin".to_string(), "tree".to_string()));
+    server.render_and_stream();
+    let mut cleared = None;
+    for _ in 0..8 {
+        match read_server_message(control_rx.recv().expect("server message")) {
+            ServerMessage::EndpointControl { kind, data }
+                if kind == crate::protocol::endpoint::PLUGIN_UI_KIND =>
+            {
+                cleared = Some(
+                    serde_json::from_str::<crate::protocol::endpoint::EndpointPluginUi>(&data)
+                        .unwrap(),
+                );
+                break;
+            }
+            _ => continue,
+        }
+    }
+    let cleared = cleared.expect("cleared plugin ui control");
+    assert!(cleared.ui.is_empty());
     shutdown_test_runtimes(&mut server);
 }
 

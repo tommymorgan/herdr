@@ -60,9 +60,9 @@ pub(crate) fn load_plugin_manifest(
 }
 
 pub(crate) fn sidebar_plugin_ui_rows(
-    plugins: &state::InstalledPluginRegistry,
+    app: &crate::app::App,
 ) -> Vec<crate::protocol::endpoint::EndpointPluginUiItem> {
-    api::plugins::sidebar_ui_rows(plugins)
+    api::plugins::sidebar_ui_rows(&app.state.installed_plugins, &app.state.plugin_ui_dynamic)
 }
 
 /// Full application: AppState + runtime concerns (event channels, async I/O).
@@ -577,6 +577,9 @@ impl App {
             plugin_command_logs: Vec::new(),
             next_plugin_command_log_id: 1,
             plugin_commands_in_flight: 0,
+            plugin_ui_dynamic: std::collections::HashMap::new(),
+            plugin_ui_refresh_in_flight: std::collections::HashMap::new(),
+            plugin_ui_refresh_dirty: std::collections::HashSet::new(),
             host_terminal_theme: crate::terminal_theme::TerminalTheme::default(),
             host_cell_size: crate::kitty_graphics::HostCellSize::default(),
             session_dirty: false,

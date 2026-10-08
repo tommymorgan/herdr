@@ -100,10 +100,13 @@ struct RawPluginManifestLinkHandler {
 #[derive(serde::Deserialize)]
 struct RawPluginManifestUi {
     id: String,
-    title: String,
+    #[serde(default)]
+    title: Option<String>,
     surface: String,
     #[serde(default)]
     action: Option<String>,
+    #[serde(default)]
+    command: Option<Vec<String>>,
     #[serde(default)]
     platforms: Option<Vec<RawPlatform>>,
 }
@@ -445,11 +448,30 @@ fn normalize_manifest_ui(
 ) -> Result<PluginManifestUi, (&'static str, String)> {
     let id = normalize_action_id(&entry.id)
         .ok_or_else(|| ("invalid_plugin_ui_id", "invalid ui id".to_string()))?;
-    let title = non_empty_trimmed(
-        &entry.title,
-        "invalid_plugin_ui_title",
-        "ui title is required",
-    )?;
+    let command = entry
+        .command
+        .map(normalize_command)
+        .transpose()
+        .map_err(|_| {
+            (
+                "invalid_plugin_ui_command",
+                format!("ui '{id}' has an invalid command"),
+            )
+        })?;
+    let title = match (&entry.title, &command) {
+        (Some(title), _) => non_empty_trimmed(
+            title,
+            "invalid_plugin_ui_title",
+            "ui title must not be blank",
+        )?,
+        (None, Some(_)) => String::new(),
+        (None, None) => {
+            return Err((
+                "invalid_plugin_ui_title",
+                format!("ui '{id}' must declare a title or a command"),
+            ));
+        }
+    };
     let surface = match entry.surface.trim() {
         "sidebar" => PluginUiSurface::Sidebar,
         other => {
@@ -473,6 +495,7 @@ fn normalize_manifest_ui(
         title,
         surface,
         action,
+        command,
         platforms,
     })
 }

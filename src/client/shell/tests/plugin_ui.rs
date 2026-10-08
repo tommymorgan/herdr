@@ -9,12 +9,16 @@ fn plugin_rows() -> Vec<EndpointPluginUiItem> {
             ui_id: "review".into(),
             title: "Review focus".into(),
             action: Some("focus".into()),
+            tab_id: None,
+            workspace_id: None,
         },
         EndpointPluginUiItem {
             plugin_id: "example.ui".into(),
             ui_id: "zoom".into(),
             title: "Zoom label".into(),
             action: None,
+            tab_id: None,
+            workspace_id: None,
         },
     ]
 }
@@ -87,4 +91,50 @@ fn plugin_row_without_action_is_not_clickable() {
         ClientShellAction::Endpoint { request, .. }
             if matches!(request.method, crate::api::schema::Method::PluginActionInvoke(_))
     )));
+}
+
+#[test]
+fn clicking_dynamic_row_sends_row_context() {
+    let config = ClientShellConfig::from_config(&Config::default());
+    let mut state = ClientShellState::new(config);
+    state.sidebar_collapsed = false;
+    state.set_snapshot(Box::new(snapshot()));
+    state.set_pane_surface(surface());
+    state.set_endpoint_plugin_ui(
+        &ClientEndpointId::Local,
+        EndpointPluginUi {
+            boot_id: "boot-1".into(),
+            revision: 1,
+            ui: vec![EndpointPluginUiItem {
+                plugin_id: "tree.plugin".into(),
+                ui_id: "tree".into(),
+                title: "    ● build".into(),
+                action: Some("focus-tab".into()),
+                tab_id: Some("tab-9".into()),
+                workspace_id: Some("ws-2".into()),
+            }],
+        },
+    );
+    state.compose(106, 20).expect("expanded sidebar");
+    let row = state.hits.plugin_ui[0].rect;
+    let press = state.handle_raw_events(vec![RawInputEvent::Mouse(crossterm::event::MouseEvent {
+        kind: crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left),
+        column: row.x + 1,
+        row: row.y,
+        modifiers: crossterm::event::KeyModifiers::empty(),
+    })]);
+    assert!(matches!(
+        &press.actions[..],
+        [ClientShellAction::Endpoint { request, .. }]
+            if matches!(
+                &request.method,
+                crate::api::schema::Method::PluginActionInvoke(params)
+                    if params.action_id == "focus-tab"
+                        && params.context.as_ref().and_then(|c| c.tab_id.as_deref()) == Some("tab-9")
+                        && params.context.as_ref().and_then(|c| c.workspace_id.as_deref())
+                            == Some("ws-2")
+                        && params.context.as_ref().and_then(|c| c.invocation_source.as_deref())
+                            == Some("plugin_ui")
+            )
+    ));
 }

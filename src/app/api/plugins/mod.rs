@@ -3,6 +3,7 @@ mod env;
 mod manifest;
 mod panes;
 mod runtime;
+pub(crate) mod ui;
 
 use super::responses::{encode_error, encode_success};
 use crate::api::schema::{
@@ -34,6 +35,13 @@ impl App {
             .into_iter()
             .map(|plugin| (plugin.plugin_id.clone(), plugin))
             .collect();
+        // Drop cached rows for plugins that no longer have dynamic entries and
+        // start refreshes for the remaining ones so new rows arrive promptly.
+        let live = ui::dynamic_ui_entries(&self.state.installed_plugins);
+        self.state
+            .plugin_ui_dynamic
+            .retain(|key, _| live.contains(key));
+        self.refresh_dynamic_plugin_ui();
     }
 
     fn refresh_installed_plugins(&mut self) -> std::io::Result<()> {
@@ -774,9 +782,15 @@ fn plugin_manifest_available(plugin: &InstalledPluginInfo) -> bool {
 }
 
 /// Sidebar rows contributed by installed, enabled plugins for the current
-/// platform. Deterministically ordered by (plugin_id, ui_id).
+/// platform. Deterministically ordered by (plugin_id, ui_id). Static entries
+/// contribute their manifest row; dynamic entries contribute the rows their
+/// refresh command last printed (`dynamic` cache).
 pub(crate) fn sidebar_ui_rows(
     plugins: &crate::app::state::InstalledPluginRegistry,
+    dynamic: &std::collections::HashMap<
+        (String, String),
+        Vec<crate::protocol::endpoint::EndpointPluginUiItem>,
+    >,
 ) -> Vec<crate::protocol::endpoint::EndpointPluginUiItem> {
     let host = manifest::current_platform();
     let mut rows = Vec::new();
@@ -795,11 +809,20 @@ pub(crate) fn sidebar_ui_rows(
                     continue;
                 }
             }
+            if entry.command.is_some() {
+                let key = (plugin.plugin_id.clone(), entry.id.clone());
+                if let Some(entry_rows) = dynamic.get(&key) {
+                    rows.extend(entry_rows.iter().cloned());
+                }
+                continue;
+            }
             rows.push(crate::protocol::endpoint::EndpointPluginUiItem {
                 plugin_id: plugin.plugin_id.clone(),
                 ui_id: entry.id.clone(),
                 title: entry.title.clone(),
                 action: entry.action.clone(),
+                tab_id: None,
+                workspace_id: None,
             });
         }
     }
@@ -1436,6 +1459,80 @@ action = "missing"
 
         let result = load_plugin_manifest(&root.display().to_string(), true);
         assert!(matches!(result, Err(("invalid_plugin_ui_action", _))));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_manifest_ui_command_entry_loads_without_title() {
+        let root = unique_temp_path("plugin-ui-dynamic");
+        write_manifest_content(
+            &root,
+            r#"
+id = "example.ui-dynamic"
+name = "Dynamic ui"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+
+[[ui]]
+id = "tree"
+surface = "sidebar"
+command = ["python3", "tree.py"]
+"#,
+        );
+
+        let plugin = load_plugin_manifest(&root.display().to_string(), true)
+            .expect("dynamic ui manifest loads");
+        assert_eq!(plugin.ui.len(), 1);
+        assert_eq!(plugin.ui[0].id, "tree");
+        assert_eq!(plugin.ui[0].title, "");
+        assert_eq!(
+            plugin.ui[0].command,
+            Some(vec!["python3".to_string(), "tree.py".to_string()])
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_manifest_rejects_static_ui_without_title_and_empty_command() {
+        let root = unique_temp_path("plugin-ui-bad-dynamic");
+        write_manifest_content(
+            &root,
+            r#"
+id = "example.ui-bad-dynamic"
+name = "Bad dynamic ui"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+
+[[ui]]
+id = "entry"
+surface = "sidebar"
+"#,
+        );
+        assert!(matches!(
+            load_plugin_manifest(&root.display().to_string(), true),
+            Err(("invalid_plugin_ui_title", _))
+        ));
+
+        write_manifest_content(
+            &root,
+            r#"
+id = "example.ui-bad-dynamic"
+name = "Bad dynamic ui"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+
+[[ui]]
+id = "entry"
+surface = "sidebar"
+command = []
+"#,
+        );
+        assert!(matches!(
+            load_plugin_manifest(&root.display().to_string(), true),
+            Err(("invalid_plugin_ui_command", _))
+        ));
 
         let _ = std::fs::remove_dir_all(root);
     }

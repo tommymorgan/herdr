@@ -526,7 +526,7 @@ impl HeadlessServer {
         }
 
         let mut broken_clients: Vec<u64> = Vec::new();
-        let plugin_ui_rows = crate::app::sidebar_plugin_ui_rows(&self.app.state.installed_plugins);
+        let plugin_ui_rows = crate::app::sidebar_plugin_ui_rows(&self.app);
         let plugin_ui_projection: Option<&[crate::protocol::endpoint::EndpointPluginUiItem]> =
             (!plugin_ui_rows.is_empty()).then_some(plugin_ui_rows.as_slice());
         for (client_id, (cols, rows), cell_size, _is_foreground, mode) in render_targets {

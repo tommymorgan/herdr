@@ -2149,15 +2149,25 @@ impl ClientShellState {
                         return None;
                     }
                     let action = hit.action.as_ref()?;
-                    Some((hit.plugin_id.clone(), action.clone()))
+                    Some((
+                        hit.plugin_id.clone(),
+                        action.clone(),
+                        hit.tab_id.clone(),
+                        hit.workspace_id.clone(),
+                    ))
                 });
-                if let Some((plugin_id, action_id)) = plugin_ui_action {
+                if let Some((plugin_id, action_id, tab_id, workspace_id)) = plugin_ui_action {
                     self.push_endpoint_method(
                         crate::api::schema::Method::PluginActionInvoke(
                             crate::api::schema::PluginActionInvokeParams {
                                 action_id,
                                 plugin_id: Some(plugin_id),
-                                context: None,
+                                context: Some(crate::api::schema::PluginInvocationContext {
+                                    tab_id,
+                                    workspace_id,
+                                    invocation_source: Some("plugin_ui".to_string()),
+                                    ..Default::default()
+                                }),
                             },
                         ),
                         outcome,

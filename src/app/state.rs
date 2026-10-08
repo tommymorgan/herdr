@@ -879,6 +879,16 @@ pub struct AppState {
     pub(crate) plugin_command_logs: Vec<crate::api::schema::PluginCommandLogInfo>,
     pub(crate) next_plugin_command_log_id: u64,
     pub(crate) plugin_commands_in_flight: usize,
+    /// Rows currently rendered for dynamic plugin UI entries, keyed by
+    /// (plugin_id, ui_id). Updated when a refresh command finishes.
+    pub(crate) plugin_ui_dynamic: std::collections::HashMap<
+        (String, String),
+        Vec<crate::protocol::endpoint::EndpointPluginUiItem>,
+    >,
+    /// Refresh commands in flight, keyed by their command log id.
+    pub(crate) plugin_ui_refresh_in_flight: std::collections::HashMap<String, (String, String)>,
+    /// Dynamic entries whose refresh command must run again.
+    pub(crate) plugin_ui_refresh_dirty: std::collections::HashSet<(String, String)>,
     /// Resolved host terminal default colors for theming embedded panes.
     pub host_terminal_theme: TerminalTheme,
     /// Last known foreground host terminal cell size in pixels.
@@ -1116,6 +1126,9 @@ impl AppState {
             plugin_command_logs: Vec::new(),
             next_plugin_command_log_id: 1,
             plugin_commands_in_flight: 0,
+            plugin_ui_dynamic: std::collections::HashMap::new(),
+            plugin_ui_refresh_in_flight: std::collections::HashMap::new(),
+            plugin_ui_refresh_dirty: std::collections::HashSet::new(),
             host_terminal_theme: TerminalTheme::default(),
             host_cell_size: crate::kitty_graphics::HostCellSize::default(),
             session_dirty: false,

@@ -172,6 +172,7 @@ impl App {
         {
             self.state.plugin_commands_in_flight =
                 self.state.plugin_commands_in_flight.saturating_sub(1);
+            let refreshed = self.handle_plugin_ui_refresh_finished(&log_id, exit_code, &stdout);
             if let Some(log) = self
                 .state
                 .plugin_command_logs
@@ -189,6 +190,9 @@ impl App {
                     crate::api::schema::PluginCommandStatus::Failed
                 };
             }
+            let _ = refreshed;
+            self.refresh_dynamic_plugin_ui_after_action(&log_id);
+            self.pump_plugin_ui_refreshes();
             return Vec::new();
         }
 
@@ -794,6 +798,9 @@ impl App {
 
     pub(super) fn emit_event(&mut self, event: crate::api::schema::EventEnvelope) {
         self.run_plugin_event_hooks(&event);
+        if plugins::ui::event_touches_plugin_ui(&event.event) {
+            self.refresh_dynamic_plugin_ui();
+        }
         self.event_hub.push(event);
     }
 

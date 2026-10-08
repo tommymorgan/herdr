@@ -128,6 +128,26 @@ declares `action` runs the referenced `[[actions]]` id; rows without `action`
 are labels only. UI entries are data: nothing runs in the render loop, and
 clients that do not negotiate the `plugin_ui` endpoint capability ignore them.
 
+Instead of a static `title`, an entry may declare `command`. Herdr then runs
+that command whenever workspace, tab, worktree, or agent-status state changes
+and renders the JSON rows it prints on stdout:
+
+```json
+[
+  {"title": "▾ main", "action": "open-workspace", "workspace_id": "ws-1"},
+  {"title": "    ● build", "action": "focus-tab", "tab_id": "tab-4", "workspace_id": "ws-1"}
+]
+```
+
+Rows carry an optional `action` and optional `tab_id`/`workspace_id` context.
+When the user clicks the row, Herdr invokes the action with that row's
+`tab_id` and `workspace_id` in the plugin invocation context (exposed as
+`HERDR_TAB_ID` and `HERDR_WORKSPACE_ID`), and refreshes the command's rows
+after the action finishes. Use this to render session-derived trees and
+lists; the bundled `plugins/agent-tree` directory in the Herdr repository is
+a complete example. The agent-tree plugin is a reference implementation for
+the fork and is not shipped with official releases.
+
 `command` values are argv arrays. Herdr does not run them through a shell, so
 there is no shell expansion unless your command starts a shell itself. Put
 language-specific behavior in your script or binary.

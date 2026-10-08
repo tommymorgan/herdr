@@ -8,24 +8,33 @@ impl App {
         correlation_id: &str,
     ) -> PluginInvocationContext {
         let mut context = self.current_plugin_context(correlation_id);
-        if let Some(provided) = provided {
-            context.workspace_id = provided.workspace_id.or(context.workspace_id);
-            context.workspace_label = provided.workspace_label.or(context.workspace_label);
-            context.workspace_cwd = provided.workspace_cwd.or(context.workspace_cwd);
-            context.worktree = provided.worktree.or(context.worktree);
-            context.tab_id = provided.tab_id.or(context.tab_id);
-            context.tab_label = provided.tab_label.or(context.tab_label);
-            context.focused_pane_id = provided.focused_pane_id.or(context.focused_pane_id);
-            context.focused_pane_cwd = provided.focused_pane_cwd.or(context.focused_pane_cwd);
-            context.focused_pane_agent = provided.focused_pane_agent.or(context.focused_pane_agent);
-            context.focused_pane_status =
-                provided.focused_pane_status.or(context.focused_pane_status);
-            context.selected_text = provided.selected_text.or(context.selected_text);
-            context.invocation_source = provided.invocation_source.or(context.invocation_source);
-            context.correlation_id = provided.correlation_id.or(context.correlation_id);
-            context.clicked_url = provided.clicked_url.or(context.clicked_url);
-            context.link_handler_id = provided.link_handler_id.or(context.link_handler_id);
+        let Some(provided) = provided else {
+            return context;
+        };
+        if provided.invocation_source.as_deref() == Some("plugin_ui") {
+            // Sidebar row clicks carry the row's own tab/workspace identity;
+            // mixing in the currently focused tab would mislabel the target.
+            context = provided;
+            if context.correlation_id.is_none() {
+                context.correlation_id = Some(correlation_id.to_string());
+            }
+            return context;
         }
+        context.workspace_id = provided.workspace_id.or(context.workspace_id);
+        context.workspace_label = provided.workspace_label.or(context.workspace_label);
+        context.workspace_cwd = provided.workspace_cwd.or(context.workspace_cwd);
+        context.worktree = provided.worktree.or(context.worktree);
+        context.tab_id = provided.tab_id.or(context.tab_id);
+        context.tab_label = provided.tab_label.or(context.tab_label);
+        context.focused_pane_id = provided.focused_pane_id.or(context.focused_pane_id);
+        context.focused_pane_cwd = provided.focused_pane_cwd.or(context.focused_pane_cwd);
+        context.focused_pane_agent = provided.focused_pane_agent.or(context.focused_pane_agent);
+        context.focused_pane_status = provided.focused_pane_status.or(context.focused_pane_status);
+        context.selected_text = provided.selected_text.or(context.selected_text);
+        context.invocation_source = provided.invocation_source.or(context.invocation_source);
+        context.correlation_id = provided.correlation_id.or(context.correlation_id);
+        context.clicked_url = provided.clicked_url.or(context.clicked_url);
+        context.link_handler_id = provided.link_handler_id.or(context.link_handler_id);
         context
     }
 

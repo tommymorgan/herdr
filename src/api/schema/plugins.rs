@@ -314,12 +314,20 @@ pub enum PluginUiSurface {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PluginManifestUi {
     pub id: String,
+    /// Static label shown when `command` is absent. Dynamic entries may omit
+    /// it because their rows carry their own titles.
+    #[serde(default)]
     pub title: String,
     pub surface: PluginUiSurface,
     /// Declared action invoked when the entry is activated. The action id
-    /// must match one of the plugin's `[[actions]]` entries.
+    /// must match one of the plugin's `[[actions]]` entries. Ignored for
+    /// dynamic entries whose rows carry their own actions.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<String>,
+    /// When set, the entry is dynamic: Herdr runs this command and renders
+    /// the JSON rows it prints on stdout instead of the static title.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platforms: Option<Vec<PluginPlatform>>,
 }
@@ -396,7 +404,7 @@ pub enum PluginActionContext {
     Selection,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct PluginInvocationContext {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workspace_id: Option<String>,

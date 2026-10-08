@@ -180,6 +180,8 @@ mod tests {
                 ui_id: "review".into(),
                 title: "Review".into(),
                 action: Some("focus".into()),
+                tab_id: None,
+                workspace_id: Some("ws-1".into()),
             }],
         )
         .unwrap();

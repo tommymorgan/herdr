@@ -1961,8 +1961,7 @@ impl HeadlessServer {
                 let location =
                     crate::server::clients::ClientShellLocation::from_snapshot(&seed_snapshot);
                 let agent_view = self.app.state.agent_view_override.clone();
-                let plugin_ui_rows =
-                    crate::app::sidebar_plugin_ui_rows(&self.app.state.installed_plugins);
+                let plugin_ui_rows = crate::app::sidebar_plugin_ui_rows(&self.app);
                 let projection_message = match agent_view.as_ref() {
                     Some(view) => match crate::protocol::endpoint::agent_view_projection_message(
                         &seed_snapshot.boot_id,

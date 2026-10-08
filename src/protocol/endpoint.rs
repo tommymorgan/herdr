@@ -94,7 +94,8 @@ pub struct EndpointAgentViewProjection {
 
 /// Plugin-declared client UI entries (plugin v1: sidebar rows). Delivered as an
 /// optional companion control to a V1 snapshot; clients that did not negotiate
-/// `plugin_ui` ignore it. Rows are data only: a title and an optional action id.
+/// `plugin_ui` ignore it. Rows are data only: a title, an optional action id,
+/// and optional row context echoed back to the server when the action fires.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndpointPluginUiItem {
     pub plugin_id: String,
@@ -102,6 +103,10 @@ pub struct EndpointPluginUiItem {
     pub title: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub action: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tab_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>,
 }
 
 /// Coherent plugin UI projection paired with the snapshot revision it accompanies.
