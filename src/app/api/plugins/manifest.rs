@@ -1,7 +1,7 @@
 use crate::api::schema::{
     InstalledPluginInfo, PluginManifestAction, PluginManifestBuild, PluginManifestEventHook,
-    PluginManifestLinkHandler, PluginManifestPane, PluginManifestStartup, PluginPanePlacement,
-    PluginPlatform, PluginSourceInfo, PluginSourceKind,
+    PluginManifestLinkHandler, PluginManifestPane, PluginManifestStartup, PluginManifestUi,
+    PluginPanePlacement, PluginPlatform, PluginSourceInfo, PluginSourceKind, PluginUiSurface,
 };
 use crate::popup_size::PopupSize;
 
@@ -31,6 +31,8 @@ struct RawPluginManifest {
     panes: Vec<RawPluginManifestPane>,
     #[serde(default)]
     link_handlers: Vec<RawPluginManifestLinkHandler>,
+    #[serde(default)]
+    ui: Vec<RawPluginManifestUi>,
 }
 
 #[derive(serde::Deserialize)]
@@ -91,6 +93,17 @@ struct RawPluginManifestLinkHandler {
     title: String,
     pattern: String,
     action: String,
+    #[serde(default)]
+    platforms: Option<Vec<RawPlatform>>,
+}
+
+#[derive(serde::Deserialize)]
+struct RawPluginManifestUi {
+    id: String,
+    title: String,
+    surface: String,
+    #[serde(default)]
+    action: Option<String>,
     #[serde(default)]
     platforms: Option<Vec<RawPlatform>>,
 }
@@ -197,6 +210,14 @@ pub(crate) fn load_plugin_manifest(
         .collect::<Result<Vec<_>, _>>()?;
     reject_duplicate_link_handler_ids(&link_handlers)?;
     validate_link_handler_actions(&link_handlers, &actions)?;
+    let mut ui = raw
+        .ui
+        .into_iter()
+        .map(normalize_manifest_ui)
+        .collect::<Result<Vec<_>, _>>()?;
+    reject_duplicate_ui_ids(&ui)?;
+    validate_ui_actions(&ui, &actions)?;
+    ui.sort_by(|a, b| a.id.cmp(&b.id));
 
     let mut warnings = validate_event_names(&events);
     if platforms.is_none() {
@@ -219,6 +240,7 @@ pub(crate) fn load_plugin_manifest(
         events,
         panes,
         link_handlers,
+        ui,
         source: Default::default(),
         warnings,
     })
@@ -387,6 +409,74 @@ fn validate_link_handler_actions(
     Ok(())
 }
 
+fn reject_duplicate_ui_ids(entries: &[PluginManifestUi]) -> Result<(), (&'static str, String)> {
+    let mut seen = std::collections::HashSet::new();
+    for entry in entries {
+        if !seen.insert(entry.id.as_str()) {
+            return Err((
+                "duplicate_plugin_ui_id",
+                format!("duplicate ui id '{}'", entry.id),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_ui_actions(
+    entries: &[PluginManifestUi],
+    actions: &[PluginManifestAction],
+) -> Result<(), (&'static str, String)> {
+    for entry in entries {
+        let Some(action) = entry.action.as_deref() else {
+            continue;
+        };
+        if !actions.iter().any(|candidate| candidate.id == action) {
+            return Err((
+                "invalid_plugin_ui_action",
+                format!("ui '{}' references unknown action '{}'", entry.id, action),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn normalize_manifest_ui(
+    entry: RawPluginManifestUi,
+) -> Result<PluginManifestUi, (&'static str, String)> {
+    let id = normalize_action_id(&entry.id)
+        .ok_or_else(|| ("invalid_plugin_ui_id", "invalid ui id".to_string()))?;
+    let title = non_empty_trimmed(
+        &entry.title,
+        "invalid_plugin_ui_title",
+        "ui title is required",
+    )?;
+    let surface = match entry.surface.trim() {
+        "sidebar" => PluginUiSurface::Sidebar,
+        other => {
+            return Err((
+                "invalid_plugin_ui_surface",
+                format!("ui '{id}' has unknown surface '{other}'; supported surfaces: sidebar"),
+            ));
+        }
+    };
+    let action = entry
+        .action
+        .as_deref()
+        .map(|action| {
+            normalize_action_id(action)
+                .ok_or_else(|| ("invalid_plugin_ui_action", "invalid ui action".to_string()))
+        })
+        .transpose()?;
+    let platforms = normalize_platforms(entry.platforms)?;
+    Ok(PluginManifestUi {
+        id,
+        title,
+        surface,
+        action,
+        platforms,
+    })
+}
+
 fn normalize_manifest_action(
     action: RawPluginManifestAction,
 ) -> Result<PluginManifestAction, (&'static str, String)> {
@@ -514,7 +604,7 @@ fn normalize_platforms(
 }
 
 /// Returns the platform the current binary was compiled for.
-fn current_platform() -> PluginPlatform {
+pub(super) fn current_platform() -> PluginPlatform {
     if cfg!(target_os = "linux") {
         PluginPlatform::Linux
     } else if cfg!(target_os = "macos") {

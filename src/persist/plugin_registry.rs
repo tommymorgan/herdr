@@ -192,6 +192,7 @@ mod tests {
             events: vec![],
             panes: vec![],
             link_handlers: vec![],
+            ui: vec![],
             source: Default::default(),
             warnings: vec![],
         }
@@ -279,6 +280,7 @@ mod tests {
                 events: vec![],
                 panes: vec![],
                 link_handlers: vec![],
+                ui: vec![],
                 source: Default::default(),
                 warnings: vec![],
             })

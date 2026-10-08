@@ -10,6 +10,7 @@ pub(crate) enum EndpointControlMessage {
     HealthPong,
     AgentViewProjection(DecodedAgentViewProjection),
     AgentCompletions(crate::protocol::endpoint::EndpointAgentCompletions),
+    PluginUi(crate::protocol::endpoint::EndpointPluginUi),
     Snapshot(Box<crate::protocol::ClientShellSnapshot>),
     Ignored,
 }
@@ -57,6 +58,11 @@ pub(crate) fn decode_endpoint_control(
         let snapshot = serde_json::from_str(data)
             .map_err(|error| format!("invalid endpoint snapshot: {error}"))?;
         return Ok(EndpointControlMessage::Snapshot(Box::new(snapshot)));
+    }
+    if kind == crate::protocol::endpoint::PLUGIN_UI_KIND {
+        return Ok(serde_json::from_str(data)
+            .map(EndpointControlMessage::PluginUi)
+            .unwrap_or(EndpointControlMessage::Ignored));
     }
     if kind.starts_with("shell.snapshot.") {
         return Err(format!(
@@ -160,6 +166,41 @@ mod tests {
                 "not json"
             )
             .unwrap(),
+            EndpointControlMessage::Ignored
+        ));
+    }
+
+    #[test]
+    fn plugin_ui_control_decodes_rows() {
+        let message = crate::protocol::endpoint::plugin_ui_message(
+            "boot",
+            3,
+            &[crate::protocol::endpoint::EndpointPluginUiItem {
+                plugin_id: "example.ui".into(),
+                ui_id: "review".into(),
+                title: "Review".into(),
+                action: Some("focus".into()),
+            }],
+        )
+        .unwrap();
+        let crate::protocol::ServerMessage::EndpointControl { kind, data } = message else {
+            panic!("expected endpoint control");
+        };
+        let EndpointControlMessage::PluginUi(decoded) =
+            decode_endpoint_control(&kind, &data).unwrap()
+        else {
+            panic!("expected plugin ui projection");
+        };
+        assert_eq!(decoded.boot_id, "boot");
+        assert_eq!(decoded.revision, 3);
+        assert_eq!(decoded.ui.len(), 1);
+        assert_eq!(decoded.ui[0].action.as_deref(), Some("focus"));
+    }
+
+    #[test]
+    fn malformed_plugin_ui_envelope_is_ignored() {
+        assert!(matches!(
+            decode_endpoint_control(crate::protocol::endpoint::PLUGIN_UI_KIND, "not json").unwrap(),
             EndpointControlMessage::Ignored
         ));
     }

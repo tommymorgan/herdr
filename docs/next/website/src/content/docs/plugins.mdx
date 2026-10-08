@@ -96,6 +96,12 @@ id = "github-issue"
 title = "Open GitHub issue"
 pattern = "^https://github\\.com/[^/]+/[^/]+/(issues|pull)/[0-9]+$"
 action = "apply"
+
+[[ui]]
+id = "apply-layout"
+title = "Apply layout"
+surface = "sidebar"
+action = "apply"
 ```
 
 Top-level `id`, `name`, `version`, and `min_herdr_version` are required.
@@ -111,10 +117,16 @@ dots. Each id type must be unique inside a plugin. Herdr qualifies action ids
 as `plugin.id.action` when it needs a globally unique name.
 
 Use `platforms = ["linux", "macos", "windows"]` to declare where the plugin
-can run. Build commands, startup hooks, actions, event hooks, panes, and link
-handlers can also declare their own `platforms`; item-level platforms override
-the top-level list. Local plugins without top-level `platforms` link with a
-warning.
+can run. Build commands, startup hooks, actions, event hooks, panes, link
+handlers, and UI entries can also declare their own `platforms`; item-level
+platforms override the top-level list. Local plugins without top-level
+`platforms` link with a warning.
+
+`[[ui]]` entries declare client-rendered UI additions. `surface = "sidebar"`
+renders a row under the workspace list in the sidebar. Clicking a row that
+declares `action` runs the referenced `[[actions]]` id; rows without `action`
+are labels only. UI entries are data: nothing runs in the render loop, and
+clients that do not negotiate the `plugin_ui` endpoint capability ignore them.
 
 `command` values are argv arrays. Herdr does not run them through a shell, so
 there is no shell expansion unless your command starts a shell itself. Put

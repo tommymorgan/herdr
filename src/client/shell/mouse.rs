@@ -2144,6 +2144,26 @@ impl ClientShellState {
                 if self.handle_endpoint_agent_click(point, outcome) {
                     return;
                 }
+                let plugin_ui_action = self.hits.plugin_ui.iter().find_map(|hit| {
+                    if !super::contains(hit.rect, point) {
+                        return None;
+                    }
+                    let action = hit.action.as_ref()?;
+                    Some((hit.plugin_id.clone(), action.clone()))
+                });
+                if let Some((plugin_id, action_id)) = plugin_ui_action {
+                    self.push_endpoint_method(
+                        crate::api::schema::Method::PluginActionInvoke(
+                            crate::api::schema::PluginActionInvokeParams {
+                                action_id,
+                                plugin_id: Some(plugin_id),
+                                context: None,
+                            },
+                        ),
+                        outcome,
+                    );
+                    return;
+                }
                 let agent_pane_id = self
                     .hits
                     .agents

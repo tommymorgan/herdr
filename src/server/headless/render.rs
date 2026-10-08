@@ -526,6 +526,9 @@ impl HeadlessServer {
         }
 
         let mut broken_clients: Vec<u64> = Vec::new();
+        let plugin_ui_rows = crate::app::sidebar_plugin_ui_rows(&self.app.state.installed_plugins);
+        let plugin_ui_projection: Option<&[crate::protocol::endpoint::EndpointPluginUiItem]> =
+            (!plugin_ui_rows.is_empty()).then_some(plugin_ui_rows.as_slice());
         for (client_id, (cols, rows), cell_size, _is_foreground, mode) in render_targets {
             #[cfg(unix)]
             if matches!(mode, ClientConnectionMode::TerminalObserve { .. })
@@ -616,6 +619,7 @@ impl HeadlessServer {
                 if client.shell_snapshot.as_ref() != Some(&candidate)
                     || client.shell_agent_completions.as_ref() != Some(&completions)
                     || client.shell_agent_view != agent_view
+                    || client.shell_plugin_ui.as_deref() != plugin_ui_projection
                 {
                     client.shell_projection_revision =
                         client.shell_projection_revision.saturating_add(1);
@@ -681,11 +685,35 @@ impl HeadlessServer {
                             continue;
                         }
                     };
+                    let plugin_ui_framed = if plugin_ui_projection.is_some()
+                        || client.shell_plugin_ui.is_some()
+                    {
+                        match crate::protocol::endpoint::plugin_ui_message(
+                            &candidate.boot_id,
+                            candidate.revision,
+                            plugin_ui_projection.unwrap_or_default(),
+                        )
+                        .map_err(std::io::Error::other)
+                        .and_then(|message| {
+                            Self::frame_server_message(&message).map_err(std::io::Error::other)
+                        }) {
+                            Ok(framed) => Some(framed),
+                            Err(err) => {
+                                warn!(client_id, err = %err, "failed to frame endpoint plugin ui");
+                                broken_clients.push(client_id);
+                                continue;
+                            }
+                        }
+                    } else {
+                        None
+                    };
                     let Some(writer) = client.writer.as_ref() else {
                         broken_clients.push(client_id);
                         continue;
                     };
                     if projection_framed.is_some_and(|framed| writer.control.send(framed).is_err())
+                        || plugin_ui_framed
+                            .is_some_and(|framed| writer.control.send(framed).is_err())
                         || writer.control.send(completion_framed).is_err()
                         || writer.control.send(snapshot_framed).is_err()
                     {
@@ -695,6 +723,7 @@ impl HeadlessServer {
                     client.shell_snapshot = Some(candidate);
                     client.shell_agent_completions = Some(completions);
                     client.shell_agent_view = agent_view;
+                    client.shell_plugin_ui = plugin_ui_projection.map(|rows| rows.to_vec());
                 }
                 shell_projection_revision = client.shell_projection_revision;
                 if !client.shell_surface_active {

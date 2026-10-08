@@ -59,6 +59,12 @@ pub(crate) fn load_plugin_manifest(
     api::plugins::load_plugin_manifest(path, enabled)
 }
 
+pub(crate) fn sidebar_plugin_ui_rows(
+    plugins: &state::InstalledPluginRegistry,
+) -> Vec<crate::protocol::endpoint::EndpointPluginUiItem> {
+    api::plugins::sidebar_ui_rows(plugins)
+}
+
 /// Full application: AppState + runtime concerns (event channels, async I/O).
 #[derive(Debug, Clone)]
 pub(crate) struct OverlayPaneState {

@@ -7563,6 +7563,12 @@
               },
               "type": "array"
             },
+            "ui": {
+              "items": {
+                "$ref": "#/schemas/success_response/$defs/PluginManifestUi"
+              },
+              "type": "array"
+            },
             "version": {
               "type": "string"
             },
@@ -9037,6 +9043,41 @@
           ],
           "type": "object"
         },
+        "PluginManifestUi": {
+          "properties": {
+            "action": {
+              "description": "Declared action invoked when the entry is activated. The action id\nmust match one of the plugin's `[[actions]]` entries.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "platforms": {
+              "items": {
+                "$ref": "#/schemas/success_response/$defs/PluginPlatform"
+              },
+              "type": [
+                "array",
+                "null"
+              ]
+            },
+            "surface": {
+              "$ref": "#/schemas/success_response/$defs/PluginUiSurface"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "surface"
+          ],
+          "type": "object"
+        },
         "PluginPaneInfo": {
           "properties": {
             "entrypoint": {
@@ -9131,6 +9172,14 @@
           "enum": [
             "local",
             "github"
+          ],
+          "type": "string"
+        },
+        "PluginUiSurface": {
+          "description": "Where a plugin-declared UI entry is rendered by the client. `Unknown`\nkeeps older readers tolerant of surfaces added by newer Herdr versions.",
+          "enum": [
+            "sidebar",
+            "unknown"
           ],
           "type": "string"
         },

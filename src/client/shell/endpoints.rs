@@ -21,6 +21,7 @@ pub(crate) struct ClientShellEndpoint {
     pub(crate) agent_view_projection: Option<ClientEndpointAgentViewProjection>,
     pending_agent_view_projection: Option<ClientEndpointAgentViewProjection>,
     pub(crate) agent_view_projection_supported: bool,
+    pub(crate) plugin_ui: Vec<crate::protocol::endpoint::EndpointPluginUiItem>,
     pub(crate) methods: Option<HashSet<String>>,
 }
 
@@ -87,6 +88,9 @@ impl ClientShellState {
                     .and_then(|endpoint| endpoint.pending_agent_view_projection.clone()),
                 agent_view_projection_supported: previous
                     .is_some_and(|endpoint| endpoint.agent_view_projection_supported),
+                plugin_ui: previous
+                    .map(|endpoint| endpoint.plugin_ui.clone())
+                    .unwrap_or_default(),
                 methods: previous.and_then(|endpoint| endpoint.methods.clone()),
             });
         }
@@ -131,8 +135,8 @@ impl ClientShellState {
             endpoint.agent_recency.clear();
             endpoint.agent_presentation = Default::default();
             endpoint.agent_view_projection = None;
-            endpoint.pending_agent_view_projection = None;
             endpoint.agent_view_projection_supported = false;
+            endpoint.plugin_ui = Vec::new();
         }
     }
 
@@ -337,6 +341,31 @@ impl ClientShellState {
                 .agent_presentation
                 .receive_completions(Some(generation), projection);
         }
+    }
+
+    pub(crate) fn set_endpoint_plugin_ui(
+        &mut self,
+        endpoint_id: &ClientEndpointId,
+        projection: crate::protocol::endpoint::EndpointPluginUi,
+    ) {
+        if let Some(endpoint) = self
+            .endpoints
+            .iter_mut()
+            .find(|endpoint| &endpoint.endpoint_id == endpoint_id)
+        {
+            endpoint.plugin_ui = projection.ui;
+        }
+    }
+
+    pub(crate) fn endpoint_plugin_ui(
+        &self,
+        endpoint_id: &ClientEndpointId,
+    ) -> &[crate::protocol::endpoint::EndpointPluginUiItem] {
+        self.endpoints
+            .iter()
+            .find(|endpoint| &endpoint.endpoint_id == endpoint_id)
+            .map(|endpoint| endpoint.plugin_ui.as_slice())
+            .unwrap_or(&[])
     }
 
     pub(crate) fn set_endpoint_agent_view_projection_for_generation(
@@ -741,6 +770,7 @@ pub(super) fn local_endpoint() -> ClientShellEndpoint {
         agent_view_projection: None,
         pending_agent_view_projection: None,
         agent_view_projection_supported: false,
+        plugin_ui: Vec::new(),
         methods: None,
     }
 }

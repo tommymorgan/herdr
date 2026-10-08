@@ -248,6 +248,7 @@ pub(super) struct ShellRenderState<'a> {
     pub(super) reveal_navigation_workspace: &'a mut bool,
     pub(super) dragged_workspace_id: Option<&'a str>,
     pub(super) workspace_drop_indicator_row: Option<u16>,
+    pub(super) plugin_ui: Vec<crate::protocol::endpoint::EndpointPluginUiItem>,
 }
 
 pub(super) fn render_shell(
@@ -299,12 +300,14 @@ pub(super) fn render_shell(
                 &mut hits,
             );
         } else {
+            let plugin_ui = state.plugin_ui.clone();
             render_sidebar(
                 buffer,
                 layout.sidebar,
                 snapshot,
                 config,
                 &mut state,
+                &plugin_ui,
                 &mut hits,
             );
         }
@@ -330,6 +333,7 @@ pub(super) fn render_shell(
         hits.new_workspace = Rect::default();
         hits.machines.clear();
         hits.workspaces.clear();
+        hits.plugin_ui.clear();
         hits.agents.clear();
         hits.endpoint_agents.clear();
         hits.tab_scroll_left = Rect::default();

@@ -773,6 +773,44 @@ fn plugin_manifest_available(plugin: &InstalledPluginInfo) -> bool {
     })
 }
 
+/// Sidebar rows contributed by installed, enabled plugins for the current
+/// platform. Deterministically ordered by (plugin_id, ui_id).
+pub(crate) fn sidebar_ui_rows(
+    plugins: &crate::app::state::InstalledPluginRegistry,
+) -> Vec<crate::protocol::endpoint::EndpointPluginUiItem> {
+    let host = manifest::current_platform();
+    let mut rows = Vec::new();
+    for plugin in plugins.values() {
+        if !plugin.enabled || !plugin_manifest_available(plugin) {
+            continue;
+        }
+        for entry in &plugin.ui {
+            if entry.surface != crate::api::schema::PluginUiSurface::Sidebar {
+                continue;
+            }
+            if let Some(platforms) =
+                manifest::effective_platforms(&entry.platforms, &plugin.platforms)
+            {
+                if !platforms.contains(&host) {
+                    continue;
+                }
+            }
+            rows.push(crate::protocol::endpoint::EndpointPluginUiItem {
+                plugin_id: plugin.plugin_id.clone(),
+                ui_id: entry.id.clone(),
+                title: entry.title.clone(),
+                action: entry.action.clone(),
+            });
+        }
+    }
+    rows.sort_by(|left, right| {
+        left.plugin_id
+            .cmp(&right.plugin_id)
+            .then_with(|| left.ui_id.cmp(&right.ui_id))
+    });
+    rows
+}
+
 fn manifest_action_info(
     plugin_id: &str,
     plugin_platforms: &Option<Vec<crate::api::schema::PluginPlatform>>,
@@ -1299,6 +1337,134 @@ command = ["echo", " a", "first "]
         assert_eq!(plugin.events[1].command, ["echo", " a"]);
         assert_eq!(plugin.events[2].command, ["echo", "a ", "first"]);
         assert_eq!(plugin.events[3].command, ["echo", " a", "first "]);
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_manifest_ui_entries_load_sorted_and_bound_to_actions() {
+        let root = unique_temp_path("plugin-ui-valid");
+        write_manifest_content(
+            &root,
+            r#"
+id = "example.ui"
+name = "UI entries"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+platforms = ["linux"]
+
+[[actions]]
+id = "focus"
+title = "Focus review"
+command = ["echo", "focus"]
+
+[[ui]]
+id = "zoom"
+title = "Zoom label"
+surface = "sidebar"
+
+[[ui]]
+id = "review"
+title = "Review focus"
+surface = "sidebar"
+action = "focus"
+"#,
+        );
+
+        let plugin =
+            load_plugin_manifest(&root.display().to_string(), true).expect("ui manifest loads");
+        assert_eq!(plugin.ui.len(), 2);
+        assert_eq!(plugin.ui[0].id, "review");
+        assert_eq!(plugin.ui[0].action.as_deref(), Some("focus"));
+        assert_eq!(plugin.ui[1].id, "zoom");
+        assert_eq!(plugin.ui[1].action, None);
+        assert_eq!(
+            plugin.ui[0].surface,
+            crate::api::schema::PluginUiSurface::Sidebar
+        );
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_manifest_rejects_unknown_ui_surface() {
+        let root = unique_temp_path("plugin-ui-bad-surface");
+        write_manifest_content(
+            &root,
+            r#"
+id = "example.ui-surface"
+name = "Bad surface"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+
+[[ui]]
+id = "entry"
+title = "Entry"
+surface = "status_bar"
+"#,
+        );
+
+        let result = load_plugin_manifest(&root.display().to_string(), true);
+        assert!(matches!(result, Err(("invalid_plugin_ui_surface", _))));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_manifest_rejects_unknown_ui_action() {
+        let root = unique_temp_path("plugin-ui-bad-action");
+        write_manifest_content(
+            &root,
+            r#"
+id = "example.ui-action"
+name = "Bad action"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+
+[[actions]]
+id = "real"
+title = "Real"
+command = ["echo", "real"]
+
+[[ui]]
+id = "entry"
+title = "Entry"
+surface = "sidebar"
+action = "missing"
+"#,
+        );
+
+        let result = load_plugin_manifest(&root.display().to_string(), true);
+        assert!(matches!(result, Err(("invalid_plugin_ui_action", _))));
+
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn plugin_manifest_rejects_duplicate_ui_ids() {
+        let root = unique_temp_path("plugin-ui-duplicate");
+        write_manifest_content(
+            &root,
+            r#"
+id = "example.ui-duplicate"
+name = "Duplicate ui"
+version = "0.1.0"
+min_herdr_version = "0.7.0"
+
+[[ui]]
+id = "entry"
+title = "First"
+surface = "sidebar"
+
+[[ui]]
+id = "entry"
+title = "Second"
+surface = "sidebar"
+"#,
+        );
+
+        let result = load_plugin_manifest(&root.display().to_string(), true);
+        assert!(matches!(result, Err(("duplicate_plugin_ui_id", _))));
 
         let _ = std::fs::remove_dir_all(root);
     }

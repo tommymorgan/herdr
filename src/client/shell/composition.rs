@@ -54,6 +54,7 @@ impl ClientShellState {
                 && self.endpoint_status(&self.active_endpoint_id)
                     == Some(ClientEndpointStatus::Online)
         });
+        let plugin_ui_rows = self.endpoint_plugin_ui(&ClientEndpointId::Local).to_vec();
         let mut render_state = render::ShellRenderState {
             machine_diagnostics: &self.machine_diagnostics,
             endpoints: &self.endpoints,
@@ -74,6 +75,7 @@ impl ClientShellState {
                 .as_ref()
                 .filter(|_| valid_navigation_target)
                 .or_else(|| pending_workspace_highlight.map(|pending| &pending.target)),
+            plugin_ui: plugin_ui_rows.clone(),
             reveal_navigation_workspace: &mut self.reveal_navigation_workspace,
             dragged_workspace_id: None,
             workspace_drop_indicator_row: None,
@@ -85,6 +87,7 @@ impl ClientShellState {
                 snapshot,
                 &self.config,
                 &mut render_state,
+                &plugin_ui_rows,
                 &mut self.hits,
             );
         } else {
@@ -205,6 +208,7 @@ impl ClientShellState {
             _ => (None, None),
         };
         let mut buffer = Buffer::empty(Rect::new(0, 0, cols, rows));
+        let plugin_ui_rows = self.endpoint_plugin_ui(&ClientEndpointId::Local).to_vec();
         self.hits = render::render_shell(
             &mut buffer,
             layout,
@@ -233,6 +237,7 @@ impl ClientShellState {
                 reveal_navigation_workspace: &mut self.reveal_navigation_workspace,
                 dragged_workspace_id,
                 workspace_drop_indicator_row,
+                plugin_ui: plugin_ui_rows,
             },
         );
         self.hits.panes = surface

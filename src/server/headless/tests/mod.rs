@@ -1008,6 +1008,98 @@ async fn client_shell_pairs_agent_view_set_replacement_and_clear_with_snapshots(
 }
 
 #[tokio::test]
+async fn client_shell_receives_plugin_ui_rows_with_snapshot() {
+    let mut server = test_headless_server();
+    let (writer, control_rx, _render_rx) = test_client_writer();
+
+    let plugin = crate::api::schema::InstalledPluginInfo {
+        plugin_id: "example.ui".into(),
+        name: "UI entries".into(),
+        version: "0.1.0".into(),
+        min_herdr_version: crate::build_info::BASE_VERSION.into(),
+        description: None,
+        manifest_path: "/plugins/example.ui/herdr-plugin.toml".into(),
+        plugin_root: "/plugins/example.ui".into(),
+        enabled: true,
+        platforms: None,
+        build: Vec::new(),
+        startup: Vec::new(),
+        actions: vec![crate::api::schema::PluginManifestAction {
+            id: "focus".into(),
+            title: "Focus review".into(),
+            description: None,
+            contexts: Vec::new(),
+            platforms: None,
+            command: vec!["echo".into(), "focus".into()],
+        }],
+        events: Vec::new(),
+        panes: Vec::new(),
+        link_handlers: Vec::new(),
+        ui: vec![crate::api::schema::PluginManifestUi {
+            id: "review".into(),
+            title: "Review focus".into(),
+            surface: crate::api::schema::PluginUiSurface::Sidebar,
+            action: Some("focus".into()),
+            platforms: None,
+        }],
+        source: Default::default(),
+        warnings: Vec::new(),
+    };
+    server
+        .app
+        .state
+        .installed_plugins
+        .insert(plugin.plugin_id.clone(), plugin);
+
+    assert!(
+        server.handle_server_event(ServerEvent::ClientShellConnected {
+            surface_reuse: false,
+            surface_delta: false,
+            surface_scroll: false,
+            client_id: 77,
+            surface_cols: 80,
+            surface_rows: 23,
+            cell_width_px: 0,
+            cell_height_px: 0,
+            pixel_mouse: false,
+            direct_graphics: false,
+            endpoint_keybindings: false,
+            mouse_capture: false,
+            surface_active: false,
+            writer,
+        })
+    );
+    let projection = match read_server_message(control_rx.recv().expect("plugin ui")) {
+        ServerMessage::EndpointControl { kind, data } => {
+            assert_eq!(kind, crate::protocol::endpoint::PLUGIN_UI_KIND);
+            serde_json::from_str::<crate::protocol::endpoint::EndpointPluginUi>(&data)
+                .expect("plugin ui decodes")
+        }
+        other => panic!("expected plugin ui control, got {other:?}"),
+    };
+    assert_eq!(projection.ui.len(), 1);
+    assert_eq!(projection.ui[0].plugin_id, "example.ui");
+    assert_eq!(projection.ui[0].action.as_deref(), Some("focus"));
+    let snapshot = client_shell_snapshot(&control_rx);
+    assert_eq!(projection.revision, snapshot.revision);
+
+    if let Some(plugin) = server.app.state.installed_plugins.get_mut("example.ui") {
+        plugin.enabled = false;
+    }
+    server.render_and_stream();
+    let cleared = match read_server_message(control_rx.recv().expect("cleared plugin ui")) {
+        ServerMessage::EndpointControl { kind, data } => {
+            assert_eq!(kind, crate::protocol::endpoint::PLUGIN_UI_KIND);
+            serde_json::from_str::<crate::protocol::endpoint::EndpointPluginUi>(&data).unwrap()
+        }
+        other => panic!("expected cleared plugin ui, got {other:?}"),
+    };
+    assert!(cleared.ui.is_empty());
+    assert!(cleared.revision > projection.revision);
+    shutdown_test_runtimes(&mut server);
+}
+
+#[tokio::test]
 async fn client_shell_receives_metadata_then_shell_free_pane_surface() {
     let mut server = test_headless_server();
     let mut workspace = crate::workspace::Workspace::test_new("shell-only-label");

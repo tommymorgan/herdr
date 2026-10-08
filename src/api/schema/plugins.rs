@@ -59,6 +59,8 @@ pub struct InstalledPluginInfo {
     pub panes: Vec<PluginManifestPane>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub link_handlers: Vec<PluginManifestLinkHandler>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ui: Vec<PluginManifestUi>,
     #[serde(default)]
     pub source: PluginSourceInfo,
     /// Warnings collected at link time or on registry load (e.g. unknown event names,
@@ -224,6 +226,17 @@ mod tests {
             plugin_managed_path_component("example/a")
         );
     }
+
+    #[test]
+    fn plugin_ui_surface_unknown_falls_back_for_newer_surfaces() {
+        let parsed: PluginUiSurface =
+            serde_json::from_str("\"hyper_bar\"").expect("unknown surface tolerated");
+        assert_eq!(parsed, PluginUiSurface::Unknown);
+        assert_eq!(
+            serde_json::to_string(&PluginUiSurface::Sidebar).unwrap(),
+            "\"sidebar\""
+        );
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -284,6 +297,29 @@ pub struct PluginManifestLinkHandler {
     pub title: String,
     pub pattern: String,
     pub action: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platforms: Option<Vec<PluginPlatform>>,
+}
+
+/// Where a plugin-declared UI entry is rendered by the client. `Unknown`
+/// keeps older readers tolerant of surfaces added by newer Herdr versions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginUiSurface {
+    Sidebar,
+    #[serde(other)]
+    Unknown,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct PluginManifestUi {
+    pub id: String,
+    pub title: String,
+    pub surface: PluginUiSurface,
+    /// Declared action invoked when the entry is activated. The action id
+    /// must match one of the plugin's `[[actions]]` entries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platforms: Option<Vec<PluginPlatform>>,
 }

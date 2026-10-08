@@ -196,12 +196,62 @@ pub(crate) fn render_collapsed_sidebar(
     );
 }
 
+pub(in crate::client::shell) fn render_plugin_ui_rows(
+    buffer: &mut Buffer,
+    x: u16,
+    start_y: u16,
+    width: u16,
+    limit_y: u16,
+    rows: &[crate::protocol::endpoint::EndpointPluginUiItem],
+    palette: &Palette,
+    hits: &mut ShellHitMap,
+) {
+    if rows.is_empty() || width == 0 || start_y >= limit_y {
+        return;
+    }
+    put_text(
+        buffer,
+        x,
+        start_y,
+        width,
+        &"─".repeat(width as usize),
+        Style::default().fg(palette.surface_dim),
+    );
+    for (index, row) in rows
+        .iter()
+        .take(limit_y.saturating_sub(start_y + 1) as usize)
+        .enumerate()
+    {
+        let row_y = start_y + 1 + index as u16;
+        let rect = Rect::new(x, row_y, width, 1);
+        let style = if row.action.is_some() {
+            Style::default().fg(palette.accent)
+        } else {
+            Style::default().fg(palette.overlay1)
+        };
+        put_text(
+            buffer,
+            x.saturating_add(1),
+            row_y,
+            width.saturating_sub(1),
+            row.title.as_str(),
+            style,
+        );
+        hits.plugin_ui.push(PluginUiHit {
+            rect,
+            plugin_id: row.plugin_id.clone(),
+            action: row.action.clone(),
+        });
+    }
+}
+
 pub(crate) fn render_sidebar(
     buffer: &mut Buffer,
     area: Rect,
     snapshot: &ClientShellSnapshot,
     config: &ClientShellConfig,
     state: &mut ShellRenderState<'_>,
+    plugin_ui: &[crate::protocol::endpoint::EndpointPluginUiItem],
     hits: &mut ShellHitMap,
 ) {
     let palette = &config.palette;
@@ -376,6 +426,16 @@ pub(crate) fn render_sidebar(
     }
 
     let footer_y = workspace_area.bottom().saturating_sub(1);
+    render_plugin_ui_rows(
+        buffer,
+        body.x,
+        y,
+        content_width,
+        footer_y,
+        plugin_ui,
+        palette,
+        hits,
+    );
     if config.mouse_capture {
         hits.new_workspace = Rect::new(
             workspace_area.x,

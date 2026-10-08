@@ -31,6 +31,8 @@ pub const AGENT_VIEW_PROJECTION_CAPABILITY: &str = "agent_view_projection";
 pub const AGENT_VIEW_PROJECTION_KIND: &str = "endpoint.agent-view.v1";
 pub const AGENT_COMPLETIONS_CAPABILITY: &str = "agent_completions";
 pub const AGENT_COMPLETIONS_KIND: &str = "endpoint.agent-completions.v1";
+pub const PLUGIN_UI_CAPABILITY: &str = "plugin_ui";
+pub const PLUGIN_UI_KIND: &str = "endpoint.plugin-ui.v1";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndpointAgentCompletions {
@@ -90,6 +92,27 @@ pub struct EndpointAgentViewProjection {
     pub view: Option<serde_json::Value>,
 }
 
+/// Plugin-declared client UI entries (plugin v1: sidebar rows). Delivered as an
+/// optional companion control to a V1 snapshot; clients that did not negotiate
+/// `plugin_ui` ignore it. Rows are data only: a title and an optional action id.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndpointPluginUiItem {
+    pub plugin_id: String,
+    pub ui_id: String,
+    pub title: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+}
+
+/// Coherent plugin UI projection paired with the snapshot revision it accompanies.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EndpointPluginUi {
+    pub boot_id: String,
+    pub revision: u64,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ui: Vec<EndpointPluginUiItem>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EndpointServerWelcome {
     pub generation: u32,
@@ -138,6 +161,22 @@ pub fn agent_view_projection_message(
     })
 }
 
+pub fn plugin_ui_message(
+    boot_id: &str,
+    revision: u64,
+    ui: &[EndpointPluginUiItem],
+) -> serde_json::Result<ServerMessage> {
+    let projection = EndpointPluginUi {
+        boot_id: boot_id.to_owned(),
+        revision,
+        ui: ui.to_vec(),
+    };
+    Ok(ServerMessage::EndpointControl {
+        kind: PLUGIN_UI_KIND.into(),
+        data: serde_json::to_string(&projection)?,
+    })
+}
+
 impl EndpointClientHello {
     pub fn supports_required_codecs(&self) -> bool {
         self.snapshot_codecs
@@ -174,6 +213,7 @@ impl EndpointServerWelcome {
                 HEALTH_CHECK_CAPABILITY.into(),
                 AGENT_VIEW_PROJECTION_CAPABILITY.into(),
                 AGENT_COMPLETIONS_CAPABILITY.into(),
+                PLUGIN_UI_CAPABILITY.into(),
             ],
             error: None,
         }
@@ -385,6 +425,7 @@ mod tests {
                 HEALTH_CHECK_CAPABILITY.to_string(),
                 AGENT_VIEW_PROJECTION_CAPABILITY.to_string(),
                 AGENT_COMPLETIONS_CAPABILITY.to_string(),
+                PLUGIN_UI_CAPABILITY.to_string(),
             ]
         );
     }
